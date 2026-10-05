@@ -7,8 +7,13 @@ const REMOTE_DATA_URLS = [
 
 const STORAGE_KEYS = {
   DATA: 'mmm_lotto_data_v1',
-  RESULTS: 'mmm_last_results_v1'
+  RESULTS: 'mmm_last_results_v2',
+  LEGACY_RESULTS: 'mmm_last_results_v1'
 };
+
+// 생성 결과는 실수로 앱을 닫았을 때만 잠깐 복원합니다.
+// 3시간이 지나면 자동으로 폐기되어 다음 실행은 처음 화면에서 시작합니다.
+const RESULT_TTL_MS = 3 * 60 * 60 * 1000;
 
 const METHOD_ORDER = ['hot', 'hotCold', 'recent100', 'balanced', 'random'];
 const METHOD_LABELS = {
@@ -399,9 +404,24 @@ function updateSelectionUI() {
   generateButton.textContent = count === 0 ? '게임을 선택해주세요' : `${count} 게임 번호 생성`;
 }
 
+function clearSavedResults() {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.RESULTS);
+    // v1.1에서 영구 저장하던 결과가 남아 있으면 함께 정리합니다.
+    localStorage.removeItem(STORAGE_KEYS.LEGACY_RESULTS);
+  } catch {
+    // 저장소 접근 실패가 앱 사용 자체를 막지 않도록 조용히 무시합니다.
+  }
+}
+
 function saveResults() {
   try {
-    localStorage.setItem(STORAGE_KEYS.RESULTS, JSON.stringify(currentResults));
+    const payload = {
+      savedAt: Date.now(),
+      results: currentResults
+    };
+    localStorage.setItem(STORAGE_KEYS.RESULTS, JSON.stringify(payload));
+    localStorage.removeItem(STORAGE_KEYS.LEGACY_RESULTS);
   } catch {
     // 저장 실패는 번호 생성 기능을 막지 않습니다.
   }
@@ -409,8 +429,25 @@ function saveResults() {
 
 function loadResults() {
   try {
-    const results = JSON.parse(localStorage.getItem(STORAGE_KEYS.RESULTS) || '[]');
-    if (!Array.isArray(results)) return [];
+    // v1.1의 영구 저장 데이터는 v1.2부터 사용하지 않습니다.
+    localStorage.removeItem(STORAGE_KEYS.LEGACY_RESULTS);
+
+    const raw = localStorage.getItem(STORAGE_KEYS.RESULTS);
+    if (!raw) return [];
+
+    const payload = JSON.parse(raw);
+    const savedAt = Number(payload?.savedAt);
+    const results = payload?.results;
+
+    if (!Number.isFinite(savedAt) || Date.now() - savedAt >= RESULT_TTL_MS) {
+      clearSavedResults();
+      return [];
+    }
+
+    if (!Array.isArray(results)) {
+      clearSavedResults();
+      return [];
+    }
 
     return results.filter((game) =>
       METHOD_ORDER.includes(game.method) &&
@@ -418,6 +455,7 @@ function loadResults() {
       game.numbers.length === 6
     );
   } catch {
+    clearSavedResults();
     return [];
   }
 }
@@ -577,11 +615,7 @@ function resetAppState() {
 
   currentResults = [];
 
-  try {
-    localStorage.removeItem(STORAGE_KEYS.RESULTS);
-  } catch {
-    // 저장소 접근 실패가 초기화 자체를 막지 않도록 조용히 무시합니다.
-  }
+  clearSavedResults();
 
   renderResults();
   updateSelectionUI();
