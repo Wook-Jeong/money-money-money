@@ -1,4 +1,4 @@
-# Money! Money! Money — v1.2
+# Money! Money! Money! — v1.2.1
 
 가볍게 동작하도록 Vanilla HTML/CSS/JavaScript만 사용한 PWA 프로토타입입니다.
 프레임워크나 빌드 과정이 없습니다.
@@ -8,7 +8,7 @@
 파일을 더블클릭하지 말고 간단한 로컬 웹서버로 실행하세요.
 
 ```bash
-cd Money_Money_Money_v1.2
+cd Money_Money_Money_v1.2.1
 python3 -m http.server 8000
 ```
 
